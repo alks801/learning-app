@@ -125,6 +125,14 @@
             background-color: #607d8b;
             margin-bottom: 20px;
         }
+        .correct {
+            background-color: #4CAF50 !important;
+            color: white;
+        }
+        .incorrect {
+            background-color: #f44336 !important;
+            color: white;
+        }
     </style>
 </head>
 <body>
@@ -160,6 +168,8 @@
             const [currentLearningIndex, setCurrentLearningIndex] = useState(0);
             const [options, setOptions] = useState([]);
             const [message, setMessage] = useState('');
+            const [selectedOption, setSelectedOption] = useState(null);
+            const [isCorrect, setIsCorrect] = useState(null);
 
             // Save words to localStorage whenever they change
             useEffect(() => {
@@ -175,23 +185,31 @@
 
                 const handleLearn = () => {
                     // Get words with progress < 5, sorted by lastUpdated (recent first)
-                    const wordsToLearn = words
-                        .filter(word => word.progress < 5)
-                        .sort((a, b) => {
-                            if (!a.lastUpdated && !b.lastUpdated) return 0;
-                            if (!a.lastUpdated) return 1;
-                            if (!b.lastUpdated) return -1;
-                            return new Date(b.lastUpdated) - new Date(a.lastUpdated);
-                        })
-                        .slice(0, 10);
-
-                    if (wordsToLearn.length === 0) {
+                    const unfinishedWords = words.filter(word => word.progress < 5);
+                    
+                    if (unfinishedWords.length === 0) {
                         setMessage('Все слова выучены!');
                         return;
                     }
 
+                    // Sort by progress (lowest first) and then by lastUpdated (oldest first)
+                    const sortedWords = [...unfinishedWords].sort((a, b) => {
+                        if (a.progress !== b.progress) {
+                            return a.progress - b.progress;
+                        }
+                        if (!a.lastUpdated && !b.lastUpdated) return 0;
+                        if (!a.lastUpdated) return -1;
+                        if (!b.lastUpdated) return 1;
+                        return new Date(a.lastUpdated) - new Date(b.lastUpdated);
+                    });
+
+                    // Take first 10 words
+                    const wordsToLearn = sortedWords.slice(0, 10);
+
                     setLearningWords(wordsToLearn);
                     setCurrentLearningIndex(0);
+                    setSelectedOption(null);
+                    setIsCorrect(null);
                     setScreen('learn');
                 };
 
@@ -243,7 +261,7 @@
                     } else {
                         // Add new word
                         const newWord = {
-                            id: Math.max(...words.map(w => w.id)),
+                            id: Math.max(0, ...words.map(w => w.id)) + 1,
                             original: formData.original,
                             translation: formData.translation,
                             progress: 0,
@@ -293,37 +311,28 @@
 
             // Learning screen
             const LearningScreen = () => {
-                const [selectedOption, setSelectedOption] = useState(null);
-                const [isCorrect, setIsCorrect] = useState(null);
-
                 useEffect(() => {
-                    if (learningWords.length > 0) {
-                        generateOptions();
+                    if (learningWords.length > 0 && currentLearningIndex < learningWords.length) {
+                        const currentWord = learningWords[currentLearningIndex];
+                        const otherWords = words.filter(w => w.id !== currentWord.id);
+                        
+                        // Get 3 random incorrect translations
+                        const wrongOptions = [...otherWords]
+                            .sort(() => 0.5 - Math.random())
+                            .slice(0, 3)
+                            .map(w => w.translation);
+
+                        // Combine with correct answer and shuffle
+                        setOptions(
+                            [...wrongOptions, currentWord.translation]
+                                .sort(() => 0.5 - Math.random())
+                        );
                     }
-                }, [currentLearningIndex]);
-
-                const generateOptions = () => {
-                    const currentWord = learningWords[currentLearningIndex];
-                    if (!currentWord) return;
-
-                    // Get 3 random incorrect translations + the correct one
-                    const incorrectTranslations = words
-                        .filter(word => word.id !== currentWord.id)
-                        .map(word => word.translation)
-                        .sort(() => 0.5 - Math.random())
-                        .slice(0, 3);
-
-                    const allOptions = [
-                        ...incorrectTranslations,
-                        currentWord.translation
-                    ].sort(() => 0.5 - Math.random());
-
-                    setOptions(allOptions);
-                    setSelectedOption(null);
-                    setIsCorrect(null);
-                };
+                }, [currentLearningIndex, learningWords]);
 
                 const handleOptionSelect = (option) => {
+                    if (selectedOption) return; // Prevent multiple selections
+                    
                     const currentWord = learningWords[currentLearningIndex];
                     const correct = option === currentWord.translation;
                     
@@ -331,22 +340,24 @@
                     setIsCorrect(correct);
 
                     if (correct) {
-                        setTimeout(() => {
-                            // Update word progress
-                            const updatedWords = words.map(word => 
-                                word.id === currentWord.id 
-                                    ? { 
-                                        ...word, 
-                                        progress: Math.min(word.progress + 1, 5),
-                                        lastUpdated: new Date().toISOString()
-                                    } 
-                                    : word
-                            );
-                            setWords(updatedWords);
+                        // Update word progress
+                        const updatedWords = words.map(word => 
+                            word.id === currentWord.id 
+                                ? { 
+                                    ...word, 
+                                    progress: word.progress + 1,
+                                    lastUpdated: new Date().toISOString()
+                                } 
+                                : word
+                        );
+                        setWords(updatedWords);
 
+                        setTimeout(() => {
                             // Move to next word or finish
                             if (currentLearningIndex < learningWords.length - 1) {
                                 setCurrentLearningIndex(currentLearningIndex + 1);
+                                setSelectedOption(null);
+                                setIsCorrect(null);
                             } else {
                                 setScreen('main');
                                 setMessage('Отличная работа! Вы завершили этот раунд.');
@@ -356,18 +367,18 @@
                 };
 
                 const handleDontKnow = () => {
-                    // Move to next word or finish
-                    if (currentLearningIndex < learningWords.length - 1) {
-                        setCurrentLearningIndex(currentLearningIndex + 1);
-                    } else {
-                        setScreen('main');
-                        setMessage('Вы завершили этот раунд. Попробуйте еще раз!');
-                    }
+                    // Move current word to the end of the list
+                    const updatedWords = [...learningWords];
+                    const [currentWord] = updatedWords.splice(currentLearningIndex, 1);
+                    updatedWords.push(currentWord);
+                    
+                    setLearningWords(updatedWords);
+                    setCurrentLearningIndex(0);
+                    setSelectedOption(null);
+                    setIsCorrect(null);
                 };
 
-                const currentWord = learningWords[currentLearningIndex];
-
-                if (!currentWord) {
+                if (learningWords.length === 0 || currentLearningIndex >= learningWords.length) {
                     return (
                         <div className="container">
                             <div className="header">Изучение слов</div>
@@ -377,6 +388,8 @@
                     );
                 }
 
+                const currentWord = learningWords[currentLearningIndex];
+
                 return (
                     <div className="container">
                         <div className="header">Изучение слов</div>
@@ -384,26 +397,37 @@
                         <div className="learning-card">
                             <div className="original-word">{currentWord.original}</div>
                             <ul className="options-list">
-                                {options.map((option, index) => (
-                                    <li 
-                                        key={index} 
-                                        className="option-item"
-                                        onClick={() => !selectedOption && handleOptionSelect(option)}
-                                        style={{
-                                            backgroundColor: selectedOption === option 
-                                                ? isCorrect ? '#4CAF50' : '#f44336'
-                                                : '#f5f5f5',
-                                            color: selectedOption === option ? 'white' : 'black'
-                                        }}
-                                    >
-                                        {option}
-                                    </li>
-                                ))}
+                                {options.map((option, index) => {
+                                    let className = "option-item";
+                                    if (selectedOption) {
+                                        if (option === currentWord.translation) {
+                                            className += " correct";
+                                        } else if (option === selectedOption) {
+                                            className += " incorrect";
+                                        }
+                                    }
+                                    return (
+                                        <li 
+                                            key={index} 
+                                            className={className}
+                                            onClick={() => !selectedOption && handleOptionSelect(option)}
+                                        >
+                                            {option}
+                                        </li>
+                                    );
+                                })}
                             </ul>
-                            <button className="btn dont-know-btn" onClick={handleDontKnow}>Не знаю</button>
+                            <button 
+                                className="btn dont-know-btn" 
+                                onClick={handleDontKnow}
+                                disabled={!!selectedOption}
+                            >
+                                Не знаю
+                            </button>
                         </div>
                         <div style={{textAlign: 'center'}}>
-                            Слово {currentLearningIndex + 1} из {learningWords.length}
+                            Слово {currentLearningIndex + 1} из {learningWords.length}<br />
+                            Прогресс: {currentWord.progress}/5
                         </div>
                     </div>
                 );
