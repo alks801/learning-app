@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Language Learning App</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 100%;
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        .header {
+            background-color: #4CAF50;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 0;
+            cursor: pointer;
+            border-radius: 5px;
+            width: 100%;
+        }
+        .word-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .word-item {
+            background-color: white;
+            margin-bottom: 10px;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .progress-bar {
+            height: 10px;
+            background-color: #e0e0e0;
+            border-radius: 5px;
+            margin-top: 5px;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            border-radius: 5px;
+            width: 0%;
+        }
+        .edit-form {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .btn-danger {
+            background-color: #f44336;
+        }
+        .learning-card {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .original-word {
+            font-size: 24px;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+        .options-list {
+            list-style-type: none;
+            padding: 0;
+        }
+        .option-item {
+            background-color: #f5f5f5;
+            margin-bottom: 10px;
+            padding: 15px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .option-item:hover {
+            background-color: #e0e0e0;
+        }
+        .dont-know-btn {
+            background-color: #607d8b;
+        }
+        .back-btn {
+            background-color: #607d8b;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // Initial words from the provided text
+        const initialWords = [
+            { id: 1, original: "Bună ziua", translation: "Добрый день", progress: 0, lastUpdated: null },
+            { id: 2, original: "Mulțumim", translation: "Спасибо", progress: 0, lastUpdated: null },
+            { id: 3, original: "rezervarea", translation: "бронирование", progress: 0, lastUpdated: null },
+            { id: 4, original: "dumneavoastră", translation: "ваше", progress: 0, lastUpdated: null },
+            { id: 5, original: "onorați", translation: "удостоены", progress: 0, lastUpdated: null },
+            { id: 6, original: "oaspeți", translation: "гости", progress: 0, lastUpdated: null },
+            { id: 7, original: "proprietatea", translation: "собственность", progress: 0, lastUpdated: null },
+            { id: 8, original: "numărul", translation: "номер", progress: 0, lastUpdated: null },
+            { id: 9, original: "telefon", translation: "телефон", progress: 0, lastUpdated: null },
+            { id: 10, original: "contacta", translation: "связаться", progress: 0, lastUpdated: null },
+            { id: 11, original: "frumoasă", translation: "красивый", progress: 0, lastUpdated: null },
+            { id: 12, original: "stimă", translation: "уважение", progress: 0, lastUpdated: null }
+        ];
+
+        const App = () => {
+            const [words, setWords] = useState(() => {
+                const savedWords = localStorage.getItem('languageWords');
+                return savedWords ? JSON.parse(savedWords) : initialWords;
+            });
+            const [screen, setScreen] = useState('main');
+            const [editingWord, setEditingWord] = useState(null);
+            const [learningWords, setLearningWords] = useState([]);
+            const [currentLearningIndex, setCurrentLearningIndex] = useState(0);
+            const [options, setOptions] = useState([]);
+            const [message, setMessage] = useState('');
+
+            // Save words to localStorage whenever they change
+            useEffect(() => {
+                localStorage.setItem('languageWords', JSON.stringify(words));
+            }, [words]);
+
+            // Main screen
+            const MainScreen = () => {
+                const handleEdit = (word) => {
+                    setEditingWord(word);
+                    setScreen('edit');
+                };
+
+                const handleLearn = () => {
+                    // Get words with progress < 5, sorted by lastUpdated (recent first)
+                    const wordsToLearn = words
+                        .filter(word => word.progress < 5)
+                        .sort((a, b) => {
+                            if (!a.lastUpdated && !b.lastUpdated) return 0;
+                            if (!a.lastUpdated) return 1;
+                            if (!b.lastUpdated) return -1;
+                            return new Date(b.lastUpdated) - new Date(a.lastUpdated);
+                        })
+                        .slice(0, 10);
+
+                    if (wordsToLearn.length === 0) {
+                        setMessage('Все слова выучены!');
+                        return;
+                    }
+
+                    setLearningWords(wordsToLearn);
+                    setCurrentLearningIndex(0);
+                    setScreen('learn');
+                };
+
+                return (
+                    <div className="container">
+                        <div className="header">Изучение слов</div>
+                        {message && <div style={{color: 'green', textAlign: 'center', margin: '10px 0'}}>{message}</div>}
+                        <button className="btn" onClick={handleLearn}>Учить</button>
+                        <ul className="word-list">
+                            {words.map(word => (
+                                <li key={word.id} className="word-item" onClick={() => handleEdit(word)}>
+                                    <div>
+                                        <div>{word.original} - {word.translation}</div>
+                                        <div className="progress-bar">
+                                            <div className="progress-fill" style={{width: `${word.progress * 20}%`}}></div>
+                                        </div>
+                                        <div>Прогресс: {word.progress}/5</div>
+                                    </div>
+                                    <div>&gt;</div>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                );
+            };
+
+            // Edit screen
+            const EditScreen = () => {
+                const [formData, setFormData] = useState({
+                    original: editingWord?.original || '',
+                    translation: editingWord?.translation || ''
+                });
+
+                const handleChange = (e) => {
+                    setFormData({
+                        ...formData,
+                        [e.target.name]: e.target.value
+                    });
+                };
+
+                const handleSave = () => {
+                    if (editingWord) {
+                        // Update existing word
+                        setWords(words.map(word => 
+                            word.id === editingWord.id 
+                                ? { ...word, original: formData.original, translation: formData.translation }
+                                : word
+                        ));
+                    } else {
+                        // Add new word
+                        const newWord = {
+                            id: Math.max(...words.map(w => w.id),
+                            original: formData.original,
+                            translation: formData.translation,
+                            progress: 0,
+                            lastUpdated: null
+                        };
+                        setWords([...words, newWord]);
+                    }
+                    setScreen('main');
+                };
+
+                const handleDelete = () => {
+                    setWords(words.filter(word => word.id !== editingWord.id));
+                    setScreen('main');
+                };
+
+                return (
+                    <div className="container">
+                        <div className="header">{editingWord ? 'Редактировать слово' : 'Добавить слово'}</div>
+                        <button className="btn back-btn" onClick={() => setScreen('main')}>Назад</button>
+                        <div className="edit-form">
+                            <div className="form-group">
+                                <label>Оригинал</label>
+                                <input 
+                                    type="text" 
+                                    name="original" 
+                                    value={formData.original} 
+                                    onChange={handleChange} 
+                                />
+                            </div>
+                            <div className="form-group">
+                                <label>Перевод</label>
+                                <input 
+                                    type="text" 
+                                    name="translation" 
+                                    value={formData.translation} 
+                                    onChange={handleChange} 
+                                />
+                            </div>
+                            <button className="btn" onClick={handleSave}>Сохранить</button>
+                            {editingWord && (
+                                <button className="btn btn-danger" onClick={handleDelete}>Удалить</button>
+                            )}
+                        </div>
+                    </div>
+                );
+            };
+
+            // Learning screen
+            const LearningScreen = () => {
+                const [selectedOption, setSelectedOption] = useState(null);
+                const [isCorrect, setIsCorrect] = useState(null);
+
+                useEffect(() => {
+                    if (learningWords.length > 0) {
+                        generateOptions();
+                    }
+                }, [currentLearningIndex]);
+
+                const generateOptions = () => {
+                    const currentWord = learningWords[currentLearningIndex];
+                    if (!currentWord) return;
+
+                    // Get 3 random incorrect translations + the correct one
+                    const incorrectTranslations = words
+                        .filter(word => word.id !== currentWord.id)
+                        .map(word => word.translation)
+                        .sort(() => 0.5 - Math.random())
+                        .slice(0, 3);
+
+                    const allOptions = [
+                        ...incorrectTranslations,
+                        currentWord.translation
+                    ].sort(() => 0.5 - Math.random());
+
+                    setOptions(allOptions);
+                    setSelectedOption(null);
+                    setIsCorrect(null);
+                };
+
+                const handleOptionSelect = (option) => {
+                    const currentWord = learningWords[currentLearningIndex];
+                    const correct = option === currentWord.translation;
+                    
+                    setSelectedOption(option);
+                    setIsCorrect(correct);
+
+                    if (correct) {
+                        setTimeout(() => {
+                            // Update word progress
+                            const updatedWords = words.map(word => 
+                                word.id === currentWord.id 
+                                    ? { 
+                                        ...word, 
+                                        progress: Math.min(word.progress + 1, 5),
+                                        lastUpdated: new Date().toISOString()
+                                    } 
+                                    : word
+                            );
+                            setWords(updatedWords);
+
+                            // Move to next word or finish
+                            if (currentLearningIndex < learningWords.length - 1) {
+                                setCurrentLearningIndex(currentLearningIndex + 1);
+                            } else {
+                                setScreen('main');
+                                setMessage('Отличная работа! Вы завершили этот раунд.');
+                            }
+                        }, 1000);
+                    }
+                };
+
+                const handleDontKnow = () => {
+                    // Move to next word or finish
+                    if (currentLearningIndex < learningWords.length - 1) {
+                        setCurrentLearningIndex(currentLearningIndex + 1);
+                    } else {
+                        setScreen('main');
+                        setMessage('Вы завершили этот раунд. Попробуйте еще раз!');
+                    }
+                };
+
+                const currentWord = learningWords[currentLearningIndex];
+
+                if (!currentWord) {
+                    return (
+                        <div className="container">
+                            <div className="header">Изучение слов</div>
+                            <div>Нет слов для изучения</div>
+                            <button className="btn back-btn" onClick={() => setScreen('main')}>Назад</button>
+                        </div>
+                    );
+                }
+
+                return (
+                    <div className="container">
+                        <div className="header">Изучение слов</div>
+                        <button className="btn back-btn" onClick={() => setScreen('main')}>Назад</button>
+                        <div className="learning-card">
+                            <div className="original-word">{currentWord.original}</div>
+                            <ul className="options-list">
+                                {options.map((option, index) => (
+                                    <li 
+                                        key={index} 
+                                        className="option-item"
+                                        onClick={() => !selectedOption && handleOptionSelect(option)}
+                                        style={{
+                                            backgroundColor: selectedOption === option 
+                                                ? isCorrect ? '#4CAF50' : '#f44336'
+                                                : '#f5f5f5',
+                                            color: selectedOption === option ? 'white' : 'black'
+                                        }}
+                                    >
+                                        {option}
+                                    </li>
+                                ))}
+                            </ul>
+                            <button className="btn dont-know-btn" onClick={handleDontKnow}>Не знаю</button>
+                        </div>
+                        <div style={{textAlign: 'center'}}>
+                            Слово {currentLearningIndex + 1} из {learningWords.length}
+                        </div>
+                    </div>
+                );
+            };
+
+            // Render appropriate screen
+            switch (screen) {
+                case 'edit':
+                    return <EditScreen />;
+                case 'learn':
+                    return <LearningScreen />;
+                default:
+                    return <MainScreen />;
+            }
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
